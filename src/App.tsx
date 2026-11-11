@@ -11,10 +11,11 @@ import { DesignLab } from "./pages/DesignLab";
 import { GameWorkspace } from "./pages/GameWorkspace";
 import { Documentation } from "./pages/Documentation";
 import { Settings } from "./pages/Settings";
+import { UsageDashboard } from "./pages/UsageDashboard";
 import forgeLogo from "./assets/forge-logo.png";
 import { Auth } from "./pages/Auth";
 import { emptyData, loadData, loadLanguagePreference, saveLanguagePreference } from "./lib/storage";
-import { acceptProjectInvite, createProjectInvite, getProjectInviteExpiry, loadCloudWorkspace, revokeProjectInvite, saveCloudWorkspace } from "./lib/cloudStorage";
+import { acceptProjectInvite, createProjectInvite, getProjectInviteExpiry, isUsageAnalyticsAdmin, loadCloudWorkspace, recordUsageActivity, revokeProjectInvite, saveCloudWorkspace } from "./lib/cloudStorage";
 import { createSupabaseClient } from "./lib/supabase";
 import { translator } from "./i18n";
 import type { AppData, Language, Section } from "./types";
@@ -48,6 +49,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!supabase);
   const [authLanguage, setAuthLanguage] = useState<Language>(() => loadLanguagePreference(data.preferences.language));
   const [readyUserId, setReadyUserId] = useState<string | null>(null);
+  const [analyticsAdmin, setAnalyticsAdmin] = useState(false);
   const [cloudError, setCloudError] = useState("");
   const [reloadCloud, setReloadCloud] = useState(0);
   const t = useMemo(() => translator(session && readyUserId === session.user.id ? data.preferences.language : authLanguage), [data.preferences.language, authLanguage, session, readyUserId]);
@@ -168,6 +170,26 @@ export default function App() {
       void supabase.removeChannel(channel);
     };
   }, [supabase, session?.user.id, readyUserId]);
+  useEffect(() => {
+    if (!supabase || !session || readyUserId !== session.user.id) {
+      setAnalyticsAdmin(false);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      try {
+        const [isAdmin] = await Promise.all([
+          isUsageAnalyticsAdmin(supabase),
+          recordUsageActivity(supabase),
+        ]);
+        if (active) setAnalyticsAdmin(isAdmin);
+      } catch (error) {
+        console.error("GAMEFORGE could not initialize private usage analytics.", error);
+        if (active) setAnalyticsAdmin(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [supabase, session?.user.id, readyUserId]);
 
   const matchingCommands = useMemo(() => commands.filter(command => `${t(command.label)} ${t(command.description)}`.toLowerCase().includes(commandQuery.toLowerCase())), [commandQuery, t]);
   useEffect(() => {
@@ -214,7 +236,7 @@ export default function App() {
   if (workspace.error) return <div className="recovery-screen"><div className="recovery-card"><div className="brand-mark"><img src={forgeLogo} alt="" /></div><div className="eyebrow">{t("WORKSPACE RECOVERY")}</div><h1>{t("We couldn't read your saved data.")}</h1><p>{t(workspace.error)}</p></div></div>;
 
   return <div className={`app-shell accent-${data.preferences.accent} theme-${data.preferences.theme}`}>
-    <Sidebar active={active} onNavigate={goTo} collapsed={data.preferences.compactSidebar} onNewProject={startNewProject} projectCount={data.projects.length} t={t} />
+    <Sidebar active={active} onNavigate={goTo} collapsed={data.preferences.compactSidebar} onNewProject={startNewProject} projectCount={data.projects.length} analyticsAdmin={analyticsAdmin} t={t} />
     <main className="app-main"><Topbar onNavigate={goTo} activeLabel={sectionLabels[active]} onCommand={() => { setCommandQuery(""); setCommandOpen(true); }} accountEmail={session.user.email ?? ""} accountName={accountName} onSignOut={() => { void supabase.auth.signOut().then(({ error }) => { if (error) notify(error.message, "error"); }); }} t={t} />
       {active === "overview" && <Overview data={data} onNavigate={goTo} onNewProject={startNewProject} t={t} language={data.preferences.language} />}
       {active === "scripts" && <ScriptLab scripts={data.scripts} setScripts={scripts => updateData({ ...data, scripts })} fontSize={data.preferences.editorFontSize} theme={data.preferences.theme} onToast={notify} newScriptRequest={newScriptRequest} onScriptRequestHandled={() => setNewScriptRequest(0)} t={t} />}
@@ -224,6 +246,7 @@ export default function App() {
       {active === "workspace" && <GameWorkspace projects={data.projects} setProjects={projects => updateData({ ...data, projects })} board={data.board} setBoard={board => updateData({ ...data, board })} scripts={data.scripts} assets={data.assets} projectResources={data.projectResources} setProjectResources={projectResources => updateData({ ...data, projectResources })} setProjectWorkspaceData={(projects, board, projectResources) => updateData({ ...data, projects, board, projectResources })} client={supabase} onToast={notify} newProjectRequest={newProjectRequest} onProjectRequestHandled={() => setNewProjectRequest(0)} currentUserId={session.user.id} createInvite={projectId => createProjectInvite(supabase, projectId)} revokeInvite={projectId => revokeProjectInvite(supabase, projectId)} getInviteExpiry={projectId => getProjectInviteExpiry(supabase, projectId)} t={t} />}
       {active === "docs" && <Documentation t={t} />}
       {active === "settings" && <Settings client={supabase} accountEmail={session.user.email ?? ""} accountName={accountName} onAccountNameChange={name => setSession(current => current ? { ...current, user: { ...current.user, user_metadata: { ...current.user.user_metadata, display_name: name } } } : current)} data={data} setData={updateData} onToast={notify} t={t} />}
+      {active === "analytics" && analyticsAdmin && <UsageDashboard client={supabase} t={t} />}
       <div className="toast-region" aria-live="polite">{toast.map(item => <div key={item.id} className={`toast ${item.error ? "toast-error" : ""}`}><span className="toast-icon">{item.error ? <X size={14} /> : <span>✓</span>}</span>{item.message}<button aria-label="Dismiss notification" onClick={() => setToast(current => current.filter(entry => entry.id !== item.id))}><X size={13} /></button></div>)}</div>
     </main>
     {commandOpen && <Modal title="" onClose={() => setCommandOpen(false)} wide><div className="command-palette"><div className="command-search"><Search size={17} /><input value={commandQuery} onChange={event => { setCommandQuery(event.target.value); setSelectedCommand(0); }} placeholder={t("Search pages, tools, actions...")} autoFocus /><kbd>ESC</kbd><IconButton label={t("Close")} onClick={() => setCommandOpen(false)}><X size={15} /></IconButton></div><div className="command-list">{matchingCommands.length ? matchingCommands.map((command, index) => <button key={`${command.label}-${command.action ?? "nav"}`} className={index === selectedCommand ? "command-selected" : ""} onMouseEnter={() => setSelectedCommand(index)} onClick={() => runCommand(command)}><span className="command-item-icon"><command.icon size={16} /></span><span className="command-item-copy"><strong>{t(command.label)}</strong><small>{t(command.description)}</small></span><ArrowRight size={14} /></button>) : <div className="command-no-results">{t("No matching commands.")}</div>}</div><div className="command-footer"><span><kbd>↑</kbd><kbd>↓</kbd> {t("Navigate")}</span><span><kbd>↵</kbd> {t("Select")}</span><span><kbd>ESC</kbd> {t("Close")}</span></div></div></Modal>}

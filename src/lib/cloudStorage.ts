@@ -1,4 +1,4 @@
-import type { AppData, BoardItem, Project, ProjectResource, ProjectRole, ProjectTeamMember } from "../types";
+import type { AppData, BoardItem, Project, ProjectResource, ProjectRole, ProjectTeamMember, UsageStats } from "../types";
 import type { GameforgeSupabase } from "./supabase";
 import { clearLegacyData, emptyData, loadData, loadLanguagePreference } from "./storage";
 
@@ -274,6 +274,46 @@ export async function removeProjectMember(client: GameforgeSupabase, projectId: 
     target_user_id: userId,
   });
   throwOnError(error);
+}
+
+export async function isUsageAnalyticsAdmin(client: GameforgeSupabase): Promise<boolean> {
+  const { data, error } = await client.rpc("gameforge_is_analytics_admin");
+  throwOnError(error);
+  if (typeof data !== "boolean") throw new Error("The usage analytics access check returned invalid data.");
+  return data;
+}
+
+export async function recordUsageActivity(client: GameforgeSupabase): Promise<void> {
+  const { error } = await client.rpc("gameforge_record_usage_activity");
+  throwOnError(error);
+}
+
+export async function getUsageStats(client: GameforgeSupabase): Promise<UsageStats> {
+  const { data, error } = await client.rpc("gameforge_get_usage_stats");
+  throwOnError(error);
+  if (!Array.isArray(data) || data.length !== 1) throw new Error("Usage statistics are unavailable for this account.");
+  const row = data[0] as {
+    total_visits?: unknown;
+    accounts_created?: unknown;
+    active_users_7d?: unknown;
+    active_users_30d?: unknown;
+    last_activity_at?: unknown;
+  };
+  const count = (value: unknown) => {
+    const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error("The usage statistics service returned an invalid counter.");
+    return parsed;
+  };
+  if (row.last_activity_at !== null && typeof row.last_activity_at !== "string") {
+    throw new Error("The usage statistics service returned an invalid activity date.");
+  }
+  return {
+    totalVisits: count(row.total_visits),
+    accountsCreated: count(row.accounts_created),
+    activeUsers7d: count(row.active_users_7d),
+    activeUsers30d: count(row.active_users_30d),
+    lastActivityAt: row.last_activity_at,
+  };
 }
 
 export async function createProjectInvite(client: GameforgeSupabase, projectId: string): Promise<string> {

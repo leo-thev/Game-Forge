@@ -13,6 +13,20 @@ GAMEFORGE utilise Supabase Auth pour les comptes et PostgreSQL avec Row Level Se
 7. Dans **Authentication → Providers → Email**, activez l’authentification par e-mail et désactivez **Confirm email**. La création de compte donnera alors directement une session sans envoyer de message de confirmation. L’adresse e-mail reste l’identifiant du compte, mais elle ne sera pas vérifiée.
 8. Dans **Authentication → URL Configuration**, définissez l’URL locale `http://localhost:5173` et ajoutez-la aux redirect URLs autorisées. Ajoutez aussi l’URL de votre déploiement avant de publier.
 9. Exécutez [`supabase/migrations/202611150001_gameforge_project_roles_and_deadlines.sql`](./supabase/migrations/202611150001_gameforge_project_roles_and_deadlines.sql) pour activer les rôles d’équipe et de tâches, les copropriétaires, ainsi que les échéances sur toutes les tâches. Cette migration attribue le rôle **Owner** aux tâches déjà présentes. Si les migrations précédentes sont déjà appliquées, exécutez uniquement cette nouvelle migration.
+10. Exécutez [`supabase/migrations/202611160001_gameforge_private_usage_analytics.sql`](./supabase/migrations/202611160001_gameforge_private_usage_analytics.sql) pour ajouter les statistiques agrégées privées d’utilisation. Si les migrations précédentes sont déjà appliquées, exécutez uniquement celle-ci.
+
+Après la migration, configurez l’unique administrateur du tableau depuis le **SQL Editor** Supabase :
+
+1. Dans **Authentication → Users**, copiez l’UUID du compte GAMEFORGE qui doit être le seul à voir les statistiques.
+2. Exécutez cette requête en remplaçant le texte entre apostrophes par cet UUID :
+
+```sql
+update public.gameforge_usage_config
+set owner_id = 'REMPLACER-PAR-L-UUID-DU-COMPTE'::uuid
+where singleton = true;
+```
+
+Cette configuration ne donne pas accès aux données des autres comptes. La base conserve seulement le nombre total de comptes créés, le nombre de visites connectées (au plus une par compte toutes les 30 minutes), ainsi que l’identifiant interne et la dernière activité nécessaires au calcul des utilisateurs actifs. Les identifiants ne sont pas accessibles depuis le navigateur et l’API du tableau ne retourne que les compteurs agrégés. Les visites des personnes non connectées ne sont pas comptabilisées. Le nombre de comptes existants est initialisé au moment où la migration est exécutée.
 
 Si vous réinitialisez une configuration GAMEFORGE déjà créée, exécutez d’abord [`supabase/reset_gameforge.sql`](./supabase/reset_gameforge.sql), puis relancez les migrations dans l’ordre. La réinitialisation supprime les données GAMEFORGE cloud, mais conserve les comptes Supabase Auth et les autres objets de la base.
 
@@ -47,6 +61,7 @@ npm run dev
 - Chaque projet dispose d’une discussion en direct. Les noms et rôles de l’équipe apparaissent à côté des messages. Les membres peuvent joindre une ressource déjà liée, répondre aux messages, réagir avec des emojis et épingler/désépingler les messages. Chaque membre peut supprimer ses propres messages ; le propriétaire et les copropriétaires peuvent supprimer n’importe quel message. Les 100 messages les plus récents sont chargés.
 - Les changements des projets, tableaux, ressources liées, messages et réactions sont actualisés entre les sessions ouvertes avec Supabase Realtime.
 - Le propriétaire ou un copropriétaire peut ajouter ou retirer le logo d’un projet depuis **Conception du jeu → Modifier les détails**. Les images sont redimensionnées et converties en WebP avant l’envoi ; le bucket est public pour que les collaborateurs puissent voir le logo.
+- Après configuration de son UUID dans `gameforge_usage_config`, le compte administrateur voit **Statistiques d’utilisation** dans la barre latérale. Ce tableau privé affiche les visites connectées, les comptes créés, les utilisateurs actifs sur 7 et 30 jours et la dernière activité globale. Aucun e-mail, adresse IP, contenu de projet, script ou message n’est collecté par cette fonctionnalité.
 - Les règles RLS et les fonctions SQL limitent les données consultables et modifiables au propriétaire du compte ou aux membres du projet. Les liens ne contiennent qu’un jeton aléatoire dont seule l’empreinte est conservée en base.
 
 Les données cloud dépendent de la disponibilité et de la configuration de votre projet Supabase. Gardez une sauvegarde JSON depuis **Paramètres → Sauvegarde et restauration**.

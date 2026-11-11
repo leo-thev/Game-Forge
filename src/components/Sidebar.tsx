@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Box, BookOpen, ChevronDown, Code2, Command, LayoutDashboard, LogOut,
+  BarChart3, Box, BookOpen, ChevronDown, Code2, Command, LayoutDashboard, LogOut,
   Palette, Plus, Settings2, Shapes, Workflow,
 } from "lucide-react";
 import type { Section } from "../types";
@@ -14,8 +14,8 @@ const groups = [
   { title: "RESOURCES", items: [{ id: "docs", label: "Documentation", icon: BookOpen }] },
 ] as const;
 
-export function Sidebar({ active, onNavigate, collapsed, onNewProject, projectCount, t }: {
-  active: Section; onNavigate: (section: Section) => void; collapsed: boolean; onNewProject: () => void; projectCount: number; t: Translator;
+export function Sidebar({ active, onNavigate, collapsed, onNewProject, projectCount, analyticsAdmin, t }: {
+  active: Section; onNavigate: (section: Section) => void; collapsed: boolean; onNewProject: () => void; projectCount: number; analyticsAdmin: boolean; t: Translator;
 }) {
   const [projectOpen, setProjectOpen] = useState(true);
   return <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -30,6 +30,7 @@ export function Sidebar({ active, onNavigate, collapsed, onNewProject, projectCo
           return <button key={item.id} className={`nav-item ${active === item.id ? "nav-item-active" : ""}`} onClick={() => onNavigate(item.id)} title={t(item.label)} aria-label={t(item.label)}><Icon size={17} /><span>{t(item.label)}</span>{active === item.id && <i />}</button>;
         })}
       </div>)}
+      {analyticsAdmin && <div className="nav-group"><div className="nav-group-title">{!collapsed && t("ADMIN")}</div><button className={`nav-item ${active === "analytics" ? "nav-item-active" : ""}`} onClick={() => onNavigate("analytics")} title={t("Usage dashboard")} aria-label={t("Usage dashboard")}><BarChart3 size={17} /><span>{t("Usage dashboard")}</span>{active === "analytics" && <i />}</button></div>}
     </nav>
     {!collapsed && <section className="project-shortcut">
       <button className="project-shortcut-title" onClick={() => setProjectOpen(!projectOpen)}><span>{t("YOUR PROJECTS")}</span><ChevronDown className={projectOpen ? "" : "rotate-closed"} size={13} /></button>
@@ -50,5 +51,5 @@ export function Topbar({ onNavigate, activeLabel, onCommand, accountEmail, accou
 
 export const sectionLabels: Record<Section, string> = {
   overview: "Overview", scripts: "Script lab", assets: "Asset manager", generator: "System generator",
-  design: "UI & design lab", workspace: "Game design", docs: "Documentation", settings: "Settings",
+  design: "UI & design lab", workspace: "Game design", analytics: "Usage dashboard", docs: "Documentation", settings: "Settings",
 };

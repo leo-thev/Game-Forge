@@ -5,6 +5,7 @@ export type Section =
   | "generator"
   | "design"
   | "workspace"
+  | "analytics"
   | "docs"
   | "settings";
 
@@ -74,6 +75,14 @@ export type ProjectTeamMember = {
   displayName: string;
   roles: ProjectRole[];
   isProjectOwner: boolean;
+};
+
+export type UsageStats = {
+  totalVisits: number;
+  accountsCreated: number;
+  activeUsers7d: number;
+  activeUsers30d: number;
+  lastActivityAt: string | null;
 };
 
 export type BoardItem = {

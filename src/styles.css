@@ -1646,6 +1646,19 @@ kbd { display: inline-grid; min-width: 18px; height: 17px; place-items: center; 
 .team-member-card fieldset > small { margin: 0; color: var(--muted); font-size: 9px; }
 .team-dialog fieldset:disabled { opacity: .7; }
 .team-dialog .button { min-height: 26px; padding: 0 8px; font-size: 9px; }
+.usage-dashboard .page-heading { margin-bottom: 20px; }
+.usage-dashboard .heading-actions .button { display: inline-flex; align-items: center; gap: 7px; }
+.usage-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 12px; }
+.usage-stat-card { display: flex; min-width: 0; min-height: 150px; flex-direction: column; align-items: flex-start; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: linear-gradient(145deg, rgba(18, 22, 30, .88), rgba(15, 18, 25, .92)); }
+.usage-stat-card > span { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgba(var(--accent-rgb), .18); border-radius: 7px; color: #aab5ff; background: rgba(var(--accent-rgb), .1); }
+.usage-stat-card > small { margin-top: 13px; color: var(--muted); font: 9px var(--font-mono); letter-spacing: .3px; }
+.usage-stat-card > strong { max-width: 100%; margin-top: 7px; color: var(--text); font: 600 26px var(--font-display); overflow-wrap: anywhere; }
+.usage-stat-card > p { margin: 7px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.usage-stat-card.usage-stat-wide { grid-column: span 2; }
+.usage-stat-card.usage-stat-wide > strong { font-size: 16px; }
+.usage-privacy-note { margin: 14px 0 0; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.usage-error { padding: 11px 13px; border: 1px solid rgba(239, 133, 138, .25); border-radius: 6px; color: #f0a0a4; background: rgba(239, 133, 138, .07); font-size: 10px; }
+.usage-loading { display: grid; min-height: 180px; place-items: center; color: var(--muted); font-size: 11px; }
 .theme-light .show-all-tasks,
 .theme-light .task-role-picker legend,
 .theme-light .team-dialog fieldset legend,
@@ -1665,6 +1678,13 @@ kbd { display: inline-grid; min-width: 18px; height: 17px; place-items: center; 
 .theme-light .project-chat-author-identity > strong { color: #354b85; }
 .theme-light .team-member-card { border-color: #e0e5ed; background: #fff; }
 .theme-light .project-deadlines li { border-color: #e0e5ed; }
+.theme-light .usage-stat-card { border-color: #e0e5ed; background: linear-gradient(145deg, #fff, #f8fafc); }
+.theme-light .usage-stat-card > small,
+.theme-light .usage-stat-card > p,
+.theme-light .usage-privacy-note,
+.theme-light .usage-loading { color: #657286; }
+.theme-light .usage-stat-card > strong { color: #202a39; }
+.theme-light .usage-error { color: #a5343d; background: #fff5f5; }
 
 @media (max-width: 760px) {
   .project-deadlines li { align-items: flex-start; flex-wrap: wrap; gap: 6px 9px; }
@@ -1672,4 +1692,5 @@ kbd { display: inline-grid; min-width: 18px; height: 17px; place-items: center; 
   .project-deadlines li small { margin-left: 0; }
   .task-role-picker > div,
   .team-dialog fieldset > div { grid-template-columns: 1fr; }
+  .usage-stat-card.usage-stat-wide { grid-column: span 1; }
 }
