@@ -1,0 +1,19 @@
+export type DocEntry = { title: string; category: string; summary: string; url: string; tags: string[] };
+
+export const docs: DocEntry[] = [
+  { title: "Luau language reference", category: "Language", summary: "Official syntax, types, control flow, functions, and Luau-specific features.", url: "https://luau.org/syntax", tags: ["syntax", "types", "tables", "functions"] },
+  { title: "Roblox Creator Documentation", category: "Reference", summary: "Official creator guides, API reference, tutorials, and platform documentation.", url: "https://create.roblox.com/docs", tags: ["api", "services", "guides"] },
+  { title: "Data stores", category: "Data", summary: "Store persistent data between sessions using DataStoreService and server scripts.", url: "https://create.roblox.com/docs/cloud-services/data-stores", tags: ["datastore", "persistence", "services"] },
+  { title: "Remote events and callbacks", category: "Networking", summary: "Communicate across client-server boundaries with RemoteEvent and RemoteFunction.", url: "https://create.roblox.com/docs/scripting/events/remote", tags: ["remoteevent", "remotefunction", "networking"] },
+  { title: "ModuleScripts", category: "Code", summary: "Reuse Luau code across scripts with ModuleScripts and require.", url: "https://create.roblox.com/docs/scripting/module", tags: ["module", "require", "code"] },
+  { title: "Roblox services", category: "Reference", summary: "Find services and engine APIs in the official API reference.", url: "https://create.roblox.com/docs/reference/engine/classes", tags: ["services", "api", "engine"] },
+  { title: "Security and cheat mitigation", category: "Security", summary: "Design server-authoritative gameplay and validate all client requests.", url: "https://create.roblox.com/docs/scripting/security/security-tactics", tags: ["security", "client", "server", "validation"] },
+  { title: "Script types and locations", category: "Code", summary: "Understand Script, LocalScript, and ModuleScript execution contexts.", url: "https://create.roblox.com/docs/scripting", tags: ["script", "localscript", "server", "client"] },
+  { title: "Players service", category: "Reference", summary: "Official Player and Players API documentation.", url: "https://create.roblox.com/docs/reference/engine/classes/Players", tags: ["players", "service", "events"] },
+  { title: "Instance API", category: "Reference", summary: "Official Instance class API: parenting, attributes, and lifecycle.", url: "https://create.roblox.com/docs/reference/engine/classes/Instance", tags: ["instance", "api", "attributes"] },
+  { title: "UI scaling", category: "UI", summary: "Make screen interfaces adapt to different devices and screen sizes.", url: "https://create.roblox.com/docs/ui/size-modifiers", tags: ["ui", "scale", "responsive"] },
+  { title: "DataStore limits and errors", category: "Data", summary: "Understand request budgets, throttling, and reliable data access patterns.", url: "https://create.roblox.com/docs/cloud-services/data-stores/error-codes-and-limits", tags: ["datastore", "budget", "limits"] },
+  { title: "Random datatype", category: "Language", summary: "Generate pseudorandom numbers and selections with the Random data type.", url: "https://create.roblox.com/docs/reference/engine/datatypes/Random", tags: ["random", "loot", "weights"] },
+  { title: "ProximityPrompt class", category: "UI", summary: "Configure an in-world prompt that lets players interact with nearby objects.", url: "https://create.roblox.com/docs/reference/engine/classes/ProximityPrompt", tags: ["interaction", "prompt", "chest"] },
+  { title: "Humanoid class", category: "Reference", summary: "Review character movement, health, and state APIs on the Humanoid class.", url: "https://create.roblox.com/docs/reference/engine/classes/Humanoid", tags: ["character", "movement", "health"] },
+];
