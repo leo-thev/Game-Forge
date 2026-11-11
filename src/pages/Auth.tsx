@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Eye, EyeOff, Sparkles } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Button, Field } from "../components/UI";
 import type { Language, Translator } from "../types";
 import type { GameforgeSupabase } from "../lib/supabase";
+import forgeLogo from "../assets/forge-logo.png";
 
 type Props = {
   client: GameforgeSupabase;
@@ -47,7 +48,7 @@ export function Auth({ client, language, onLanguageChange, t }: Props) {
 
   return <main className="auth-screen">
     <section className="auth-card">
-      <header className="auth-brand"><span className="brand-mark"><Sparkles size={17} fill="currentColor" /></span><strong>GAMEFORGE</strong><small>STUDIO</small></header>
+      <header className="auth-brand"><span className="brand-mark"><img src={forgeLogo} alt="" /></span><strong>GAMEFORGE</strong><small>STUDIO</small></header>
       <div className="eyebrow"><span className="eyebrow-line" /> {t(invitePending ? "PROJECT INVITATION" : "YOUR CREATOR WORKSPACE")}</div>
       <h1>{t(mode === "signIn" ? "Welcome back." : "Create your account.")}</h1>
       <p className="auth-description">{t(invitePending ? "Sign in or create an account to join this project." : "Sign in to sync your Roblox projects securely across your devices.")}</p>

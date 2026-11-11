@@ -1,11 +1,12 @@
 import { useState } from "react";
 import {
-  Activity, Box, BookOpen, ChevronDown, Code2, Command, Compass, LayoutDashboard, LogOut,
-  Palette, Plus, Settings2, Shapes, Sparkles, Workflow,
+  Box, BookOpen, ChevronDown, Code2, Command, LayoutDashboard, LogOut,
+  Palette, Plus, Settings2, Shapes, Workflow,
 } from "lucide-react";
 import type { Section } from "../types";
 import type { Translator } from "../types";
 import { IconButton } from "./UI";
+import forgeLogo from "../assets/forge-logo.png";
 
 const groups = [
   { title: "WORKSPACE", items: [{ id: "overview", label: "Overview", icon: LayoutDashboard }, { id: "workspace", label: "Game design", icon: Workflow }] },
@@ -18,7 +19,7 @@ export function Sidebar({ active, onNavigate, collapsed, onNewProject, projectCo
 }) {
   const [projectOpen, setProjectOpen] = useState(true);
   return <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}>
-    <div className="brand"><div className="brand-mark"><Sparkles size={16} fill="currentColor" /></div>{!collapsed && <><span className="brand-name">GAMEFORGE</span><span className="brand-edition">STUDIO</span></>}</div>
+    <div className="brand"><div className="brand-mark"><img src={forgeLogo} alt="" /></div>{!collapsed && <><span className="brand-name">GAMEFORGE</span><span className="brand-edition">STUDIO</span></>}</div>
     {!collapsed && <div className="workspace-switch"><span className="workspace-avatar">G</span><span className="workspace-label"><b>{t("My workspace")}</b><small>{t("PERSONAL PLAN")}</small></span><ChevronDown size={14} /></div>}
     {collapsed && <div className="sidebar-divider" />}
     <nav className="main-nav" aria-label="Main navigation">
@@ -44,7 +45,7 @@ export function Sidebar({ active, onNavigate, collapsed, onNewProject, projectCo
 export function Topbar({ onNavigate, activeLabel, onCommand, accountEmail, accountName, onSignOut, t }: { onNavigate: (section: Section) => void; activeLabel: string; onCommand: () => void; accountEmail: string; accountName: string; onSignOut: () => void; t: Translator }) {
   const shortcut = navigator.userAgent.includes("Mac") ? "⌘ K" : "Ctrl K";
   const displayName = accountName.trim() || accountEmail;
-  return <header className="topbar"><div className="breadcrumbs"><span className="breadcrumb-muted">GAMEFORGE</span><span className="breadcrumb-slash">/</span><span>{t(activeLabel)}</span></div><div className="topbar-actions"><button className="global-search" onClick={onCommand}><Command size={14} /><span>{t("Jump to...")}</span><kbd>{shortcut}</kbd></button><span className="online-indicator"><i /> {t("CLOUD STORAGE")}</span><span className="account-email" title={accountEmail}>{displayName}</span><IconButton className="account-signout" label={t("Sign out")} onClick={onSignOut}><LogOut size={15} /></IconButton><button className="topbar-avatar" aria-label={t("Open overview")} onClick={() => onNavigate("overview")}>{displayName.charAt(0).toUpperCase() || "G"}</button></div></header>;
+  return <header className="topbar"><div className="breadcrumbs"><img className="breadcrumb-logo" src={forgeLogo} alt="" /><span className="breadcrumb-muted">GAMEFORGE</span><span className="breadcrumb-slash">/</span><span>{t(activeLabel)}</span></div><div className="topbar-actions"><button className="global-search" onClick={onCommand}><Command size={14} /><span>{t("Jump to...")}</span><kbd>{shortcut}</kbd></button><span className="online-indicator"><i /> {t("CLOUD STORAGE")}</span><span className="account-email" title={accountEmail}>{displayName}</span><IconButton className="account-signout" label={t("Sign out")} onClick={onSignOut}><LogOut size={15} /></IconButton><button className="topbar-avatar" aria-label={t("Open overview")} onClick={() => onNavigate("overview")}>{displayName.charAt(0).toUpperCase() || "G"}</button></div></header>;
 }
 
 export const sectionLabels: Record<Section, string> = {
