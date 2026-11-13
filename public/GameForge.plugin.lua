@@ -1,7 +1,7 @@
 local HttpService = game:GetService("HttpService")
 
 local toolbar = plugin:CreateToolbar("GAMEFORGE")
-local openButton = toolbar:CreateButton("Project Explorer v1.2", "Import this game's hierarchy into GAMEFORGE (v1.2)", "")
+local openButton = toolbar:CreateButton("Project Explorer v1.3", "Import this game's hierarchy into GAMEFORGE (v1.3)", "")
 openButton.ClickableWhenViewportHidden = true
 
 local widgetInfo = DockWidgetPluginGuiInfo.new(
@@ -14,7 +14,7 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 	300
 )
 local widget = plugin:CreateDockWidgetPluginGui("GameForgeProjectExplorer", widgetInfo)
-widget.Title = "GAMEFORGE Project Explorer v1.2"
+widget.Title = "GAMEFORGE Project Explorer v1.3"
 
 local function makeLabel(parent, text, height, textSize)
 	local label = Instance.new("TextLabel")
@@ -52,7 +52,7 @@ layout.Padding = UDim.new(0, 9)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = content
 
-local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER  /  v1.2", 24, 16)
+local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER  /  v1.3", 24, 16)
 heading.Font = Enum.Font.SourceSansBold
 heading.LayoutOrder = 1
 makeLabel(content, "Connect a project, then import the whole place. Large hierarchies are sent in smaller batches automatically. Only names, types, and paths are sent; script source is never read.", 52, 13).LayoutOrder = 2
@@ -119,12 +119,21 @@ local function getSavedConfig()
 	return nil
 end
 
+local function classNameFor(instance)
+	local className = instance.ClassName
+	if type(className) ~= "string" or className == "" then
+		return "UnknownClass"
+	end
+	return className
+end
+
 local function segmentFor(instance)
 	local parent = instance.Parent
 	if not parent then
 		error("A hierarchy root no longer has a parent.")
 	end
 
+	local instanceClassName = classNameFor(instance)
 	local siblings = parent:GetChildren()
 	local originalOrder = {}
 	for index, sibling in ipairs(siblings) do
@@ -134,15 +143,17 @@ local function segmentFor(instance)
 		if left.Name ~= right.Name then
 			return left.Name < right.Name
 		end
-		if left.ClassName ~= right.ClassName then
-			return left.ClassName < right.ClassName
+		local leftClassName = classNameFor(left)
+		local rightClassName = classNameFor(right)
+		if leftClassName ~= rightClassName then
+			return leftClassName < rightClassName
 		end
 		return originalOrder[left] < originalOrder[right]
 	end)
 
 	local ordinal = 0
 	for _, sibling in ipairs(siblings) do
-		if sibling.ClassName == instance.ClassName and sibling.Name == instance.Name then
+		if classNameFor(sibling) == instanceClassName and sibling.Name == instance.Name then
 			ordinal += 1
 		end
 		if sibling == instance then
@@ -153,7 +164,7 @@ local function segmentFor(instance)
 	if ordinal == 0 then
 		error("Could not identify a selected hierarchy root.")
 	end
-	return HttpService:UrlEncode(instance.Name) .. "~" .. instance.ClassName .. "~" .. ordinal
+	return HttpService:UrlEncode(instance.Name) .. "~" .. instanceClassName .. "~" .. ordinal
 end
 
 local function keyFor(instance)
@@ -274,7 +285,7 @@ local function importRoot(config, root, progress)
 		table.insert(rows, {
 			instance_key = instanceKey,
 			name = instance.Name,
-			class_name = instance.ClassName,
+			class_name = classNameFor(instance),
 			full_path = fullPath,
 		})
 		if #rows >= 500 then
@@ -288,20 +299,23 @@ local function importRoot(config, root, progress)
 		end
 		table.sort(children, function(left, right)
 			if left.Name == right.Name then
-				if left.ClassName == right.ClassName then
+				local leftClassName = classNameFor(left)
+				local rightClassName = classNameFor(right)
+				if leftClassName == rightClassName then
 					return originalOrder[left] < originalOrder[right]
 				end
-				return left.ClassName < right.ClassName
+				return leftClassName < rightClassName
 			end
 			return left.Name < right.Name
 		end)
 
 		local duplicateCounts = {}
 		for _, child in ipairs(children) do
-			local duplicateKey = child.ClassName .. "\0" .. child.Name
+			local childClassName = classNameFor(child)
+			local duplicateKey = childClassName .. "\0" .. child.Name
 			duplicateCounts[duplicateKey] = (duplicateCounts[duplicateKey] or 0) + 1
 			local ordinal = duplicateCounts[duplicateKey]
-			local segment = HttpService:UrlEncode(child.Name) .. "~" .. child.ClassName .. "~" .. ordinal
+			local segment = HttpService:UrlEncode(child.Name) .. "~" .. childClassName .. "~" .. ordinal
 			add(child, instanceKey .. "/" .. segment, fullPath .. "/" .. child.Name, depth + 1)
 		end
 	end
@@ -349,7 +363,7 @@ importButton.Activated:Connect(function()
 		local roots = game:GetChildren()
 		table.sort(roots, function(left, right)
 			if left.Name == right.Name then
-				return left.ClassName < right.ClassName
+				return classNameFor(left) < classNameFor(right)
 			end
 			return left.Name < right.Name
 		end)
