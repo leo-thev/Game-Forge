@@ -1,7 +1,7 @@
 local HttpService = game:GetService("HttpService")
 
 local toolbar = plugin:CreateToolbar("GAMEFORGE")
-local openButton = toolbar:CreateButton("Project Explorer v1.3", "Import this game's hierarchy into GAMEFORGE (v1.3)", "")
+local openButton = toolbar:CreateButton("Project Explorer v1.4", "Import this game's hierarchy into GAMEFORGE (v1.4)", "")
 openButton.ClickableWhenViewportHidden = true
 
 local widgetInfo = DockWidgetPluginGuiInfo.new(
@@ -14,7 +14,7 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 	300
 )
 local widget = plugin:CreateDockWidgetPluginGui("GameForgeProjectExplorer", widgetInfo)
-widget.Title = "GAMEFORGE Project Explorer v1.3"
+widget.Title = "GAMEFORGE Project Explorer v1.4"
 
 local function makeLabel(parent, text, height, textSize)
 	local label = Instance.new("TextLabel")
@@ -52,7 +52,7 @@ layout.Padding = UDim.new(0, 9)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = content
 
-local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER  /  v1.3", 24, 16)
+local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER  /  v1.4", 24, 16)
 heading.Font = Enum.Font.SourceSansBold
 heading.LayoutOrder = 1
 makeLabel(content, "Connect a project, then import the whole place. Large hierarchies are sent in smaller batches automatically. Only names, types, and paths are sent; script source is never read.", 52, 13).LayoutOrder = 2
@@ -127,6 +127,13 @@ local function classNameFor(instance)
 	return className
 end
 
+local function isExplorerVisible(instance)
+	local ok, isLocked = pcall(function()
+		return instance.RobloxLocked
+	end)
+	return not (ok and isLocked == true)
+end
+
 local function segmentFor(instance)
 	local parent = instance.Parent
 	if not parent then
@@ -134,7 +141,12 @@ local function segmentFor(instance)
 	end
 
 	local instanceClassName = classNameFor(instance)
-	local siblings = parent:GetChildren()
+	local siblings = {}
+	for _, sibling in ipairs(parent:GetChildren()) do
+		if isExplorerVisible(sibling) then
+			table.insert(siblings, sibling)
+		end
+	end
 	local originalOrder = {}
 	for index, sibling in ipairs(siblings) do
 		originalOrder[sibling] = index
@@ -292,7 +304,12 @@ local function importRoot(config, root, progress)
 			sendChunk(false)
 		end
 
-		local children = instance:GetChildren()
+		local children = {}
+		for _, child in ipairs(instance:GetChildren()) do
+			if isExplorerVisible(child) then
+				table.insert(children, child)
+			end
+		end
 		local originalOrder = {}
 		for index, child in ipairs(children) do
 			originalOrder[child] = index
@@ -360,7 +377,12 @@ importButton.Activated:Connect(function()
 	status.TextColor3 = Color3.fromRGB(160, 174, 202)
 
 	local ok, result = pcall(function()
-		local roots = game:GetChildren()
+		local roots = {}
+		for _, root in ipairs(game:GetChildren()) do
+			if isExplorerVisible(root) then
+				table.insert(roots, root)
+			end
+		end
 		table.sort(roots, function(left, right)
 			if left.Name == right.Name then
 				return classNameFor(left) < classNameFor(right)
