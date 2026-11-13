@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Check, ChevronDown, CircleAlert, Copy, Download, FolderTree, Link2, LoaderCircle, Plus, RefreshCw, Search, Unlink, X } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, Copy, Download, Eye, FolderTree, Link2, LoaderCircle, Plus, RefreshCw, Search, Unlink, X } from "lucide-react";
 import type { Project, StudioInstance, StudioSystemAssignment, Translator } from "../types";
 import { Button, Field, IconButton, Modal } from "./UI";
 import { createStudioLink, hasStudioLink, revokeStudioLink } from "../lib/cloudStorage";
 import { getSupabaseConnectionConfig, type GameforgeSupabase } from "../lib/supabase";
+import { StudioTreeViewer } from "./StudioTreeViewer";
 
 type PlaceSummary = { id: string; universeId: string; lastSeenAt: string };
 type StudioPluginConfig = { supabaseUrl: string; anonKey: string; studioToken: string; projectName: string };
@@ -37,6 +38,7 @@ export function StudioExplorer({ client, project, t }: { client: GameforgeSupaba
   const [linkActive, setLinkActive] = useState(false);
   const [setupConfig, setSetupConfig] = useState<StudioPluginConfig | null>(null);
   const [copied, setCopied] = useState(false);
+  const [treeOpen, setTreeOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -205,6 +207,7 @@ export function StudioExplorer({ client, project, t }: { client: GameforgeSupaba
           <p>{t("Import names, types, and paths from Studio, then group instances into your game systems. Script source is never imported.")}</p>
         </div>
         <div className="studio-explorer-actions">
+          <Button variant="secondary" disabled={!placeInstances.some(instance => instance.is_present)} onClick={() => setTreeOpen(true)}><Eye size={14} />{t("View hierarchy")}</Button>
           <Button variant="secondary" disabled={busy !== ""} onClick={() => void load()}><RefreshCw size={14} />{t("Refresh")}</Button>
           <Button variant="secondary" disabled={busy !== ""} onClick={() => void connectPlugin()}><Link2 size={14} />{linkActive ? t("Reconnect plugin") : t("Connect Studio plugin")}</Button>
           {linkActive && <IconButton label={t("Disconnect Studio plugin")} disabled={busy !== ""} onClick={() => void disconnectPlugin()}><Unlink size={14} /></IconButton>}
@@ -240,6 +243,12 @@ export function StudioExplorer({ client, project, t }: { client: GameforgeSupaba
         </>}
       </>}
     </section>
+    {treeOpen && <StudioTreeViewer
+      instances={placeInstances}
+      projectName={project.name}
+      t={t}
+      onClose={() => setTreeOpen(false)}
+    />}
     {setupConfig && <Modal title={t("Connect Roblox Studio")} onClose={() => setSetupConfig(null)} wide>
       <div className="studio-setup-dialog">
         <p>{t("Download the plugin, install it in Studio, then paste this one-time connection configuration into the plugin and click Connect.")}</p>
