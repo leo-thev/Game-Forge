@@ -1,5 +1,4 @@
 local HttpService = game:GetService("HttpService")
-local Selection = game:GetService("Selection")
 
 local toolbar = plugin:CreateToolbar("GAMEFORGE")
 local openButton = toolbar:CreateButton("Project Explorer", "Import this game's hierarchy into GAMEFORGE", "")
@@ -56,7 +55,7 @@ layout.Parent = content
 local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER", 24, 16)
 heading.Font = Enum.Font.SourceSansBold
 heading.LayoutOrder = 1
-makeLabel(content, "Connect a project, select one or more roots in Explorer, then import only those branches. Only names, types, and paths are sent; script source is never read.", 52, 13).LayoutOrder = 2
+makeLabel(content, "Connect a project, then import the whole place. Large hierarchies are sent in smaller batches automatically. Only names, types, and paths are sent; script source is never read.", 52, 13).LayoutOrder = 2
 
 local configBox = Instance.new("TextBox")
 configBox.Name = "ConnectionConfiguration"
@@ -92,7 +91,7 @@ end
 
 local connectButton = makeButton("Connect", 4)
 connectButton.BackgroundColor3 = Color3.fromRGB(39, 49, 73)
-local importButton = makeButton("Import selected branch(es)", 5)
+local importButton = makeButton("Import entire game", 5)
 
 local status = makeLabel(content, "Not connected.", 42, 13)
 status.LayoutOrder = 6
@@ -123,7 +122,7 @@ end
 local function segmentFor(instance)
 	local parent = instance.Parent
 	if not parent then
-		error("A selected hierarchy root no longer has a parent.")
+		error("A hierarchy root no longer has a parent.")
 	end
 
 	local siblings = parent:GetChildren()
@@ -166,40 +165,75 @@ local function keyFor(instance)
 	return parentKey == "" and segment or parentKey .. "/" .. segment
 end
 
-local function getSelectedRoots()
-	local selected = Selection:Get()
-	local roots = {}
-	for _, candidate in ipairs(selected) do
-		if candidate ~= game and candidate:IsDescendantOf(game) then
-			local nested = false
-			for _, other in ipairs(selected) do
-				if other ~= candidate and candidate:IsDescendantOf(other) then
-					nested = true
-					break
-				end
+local function postSnapshotChunk(config, placeId, scopeKey, snapshotId, rows, isFinalChunk)
+	local function send(rowsToSend, finalChunk)
+		local body = HttpService:JSONEncode({
+			studio_token = config.studioToken,
+			target_place_id = tostring(placeId),
+			target_universe_id = tostring(game.GameId),
+			target_scope_key = scopeKey,
+			snapshot_id = snapshotId,
+			is_final_chunk = finalChunk,
+			instance_rows = rowsToSend,
+		})
+		if #body > 1000000 then
+			if #rowsToSend <= 1 then
+				error("A hierarchy item is too large to send. Please retry the import.")
 			end
-			if not nested then
-				table.insert(roots, candidate)
+			local middle = math.floor(#rowsToSend / 2)
+			local first = table.create(middle)
+			local second = table.create(#rowsToSend - middle)
+			for index = 1, middle do
+				first[index] = rowsToSend[index]
 			end
+			for index = middle + 1, #rowsToSend do
+				second[#second + 1] = rowsToSend[index]
+			end
+			local requests = send(first, false)
+			task.wait(0.25)
+			return requests + send(second, finalChunk)
 		end
+
+		local response = HttpService:RequestAsync({
+			Url = config.supabaseUrl .. "/rest/v1/rpc/gameforge_studio_upsert_snapshot",
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json",
+				["apikey"] = config.anonKey,
+				["Authorization"] = "Bearer " .. config.anonKey,
+			},
+			Body = body,
+		})
+		if not response.Success then
+			error("GAMEFORGE returned HTTP " .. tostring(response.StatusCode) .. ". Check the connection and try again.")
+		end
+		return 1
 	end
-	if #roots == 0 then
-		error("Select one or more folders, models, or services in Studio's Explorer before importing.")
-	end
-	return roots
+
+	return send(rows, isFinalChunk)
 end
 
-local function buildSnapshot(root)
-	if game.PlaceId == 0 then
-		error("Publish or open a place with a valid Place ID before importing.")
+local function importRoot(config, root, progress)
+	local scopeKey = keyFor(root)
+	local snapshotId = HttpService:GenerateGUID(false)
+	local rows = {}
+	local imported = 0
+	local chunkCount = 0
+
+	local function sendChunk(isFinalChunk)
+		local sentChunks = postSnapshotChunk(config, game.PlaceId, scopeKey, snapshotId, rows, isFinalChunk)
+		imported += #rows
+		chunkCount += sentChunks
+		table.clear(rows)
+		progress(imported, chunkCount)
+		if not isFinalChunk then
+			task.wait(0.25)
+		end
 	end
 
-	local rows = {}
-	local rootKey = keyFor(root)
-	local rootPath = root:GetFullName()
 	local function add(instance, instanceKey, fullPath, depth)
 		if depth > 100 then
-			error("The hierarchy is deeper than the plugin can safely import.")
+			error("A hierarchy branch is deeper than the plugin can safely import.")
 		end
 		if #instanceKey > 1500 or #fullPath > 3000 then
 			error("A hierarchy path is too long to import.")
@@ -210,8 +244,8 @@ local function buildSnapshot(root)
 			class_name = instance.ClassName,
 			full_path = fullPath,
 		})
-		if #rows > 3000 then
-			error("This selected branch has more than 3,000 instances. Select a smaller folder or model inside it and import that branch separately.")
+		if #rows >= 500 then
+			sendChunk(false)
 		end
 
 		local children = instance:GetChildren()
@@ -235,14 +269,13 @@ local function buildSnapshot(root)
 			duplicateCounts[duplicateKey] = (duplicateCounts[duplicateKey] or 0) + 1
 			local ordinal = duplicateCounts[duplicateKey]
 			local segment = HttpService:UrlEncode(child.Name) .. "~" .. child.ClassName .. "~" .. ordinal
-			local childKey = instanceKey .. "/" .. segment
-			local childPath = fullPath .. "/" .. child.Name
-			add(child, childKey, childPath, depth + 1)
+			add(child, instanceKey .. "/" .. segment, fullPath .. "/" .. child.Name, depth + 1)
 		end
 	end
 
-	add(root, rootKey, rootPath, 0)
-	return rows, rootKey
+	add(root, scopeKey, root:GetFullName(), 0)
+	sendChunk(true)
+	return imported, chunkCount
 end
 
 connectButton.Activated:Connect(function()
@@ -268,50 +301,46 @@ importButton.Activated:Connect(function()
 		status.TextColor3 = Color3.fromRGB(240, 145, 145)
 		return
 	end
+	if game.PlaceId == 0 then
+		status.Text = "Publish or open a place with a valid Place ID before importing."
+		status.TextColor3 = Color3.fromRGB(240, 145, 145)
+		return
+	end
 
 	importButton.Active = false
 	importButton.AutoButtonColor = false
-	status.Text = "Reading selected branches and sending metadata..."
+	status.Text = "Preparing the entire game hierarchy..."
 	status.TextColor3 = Color3.fromRGB(160, 174, 202)
 
 	local ok, result = pcall(function()
-		local roots = getSelectedRoots()
-		local totalImported = 0
-		for index, root in ipairs(roots) do
-			status.Text = "Reading branch " .. tostring(index) .. " of " .. tostring(#roots) .. ": " .. root:GetFullName()
-			local rows, scopeKey = buildSnapshot(root)
-			local body = HttpService:JSONEncode({
-				studio_token = config.studioToken,
-				target_place_id = tostring(game.PlaceId),
-				target_universe_id = tostring(game.GameId),
-				target_scope_key = scopeKey,
-				instance_rows = rows,
-			})
-			if #body > 4000000 then
-				error("The selected branch is too large to send. Select a smaller folder or model inside it.")
+		local roots = game:GetChildren()
+		table.sort(roots, function(left, right)
+			if left.Name == right.Name then
+				return left.ClassName < right.ClassName
 			end
-			local response = HttpService:RequestAsync({
-				Url = config.supabaseUrl .. "/rest/v1/rpc/gameforge_studio_upsert_snapshot",
-				Method = "POST",
-				Headers = {
-					["Content-Type"] = "application/json",
-					["apikey"] = config.anonKey,
-					["Authorization"] = "Bearer " .. config.anonKey,
-				},
-				Body = body,
-			})
-			if not response.Success then
-				error("GAMEFORGE returned HTTP " .. tostring(response.StatusCode) .. " while importing " .. root:GetFullName() .. ". Check the connection and try again.")
-			end
-			totalImported += #rows
+			return left.Name < right.Name
+		end)
+		if #roots == 0 then
+			error("This place has no hierarchy branches to import.")
 		end
-		return totalImported
+
+		local totalImported = 0
+		local totalChunks = 0
+		for index, root in ipairs(roots) do
+			status.Text = "Importing branch " .. tostring(index) .. " of " .. tostring(#roots) .. ": " .. root.Name
+			local imported, chunks = importRoot(config, root, function(branchImported, branchChunks)
+				status.Text = "Importing " .. root.Name .. ": " .. tostring(branchImported) .. " instances in " .. tostring(branchChunks) .. " batches."
+			end)
+			totalImported += imported
+			totalChunks += chunks
+		end
+		return { instances = totalImported, chunks = totalChunks }
 	end)
 
 	importButton.Active = true
 	importButton.AutoButtonColor = true
 	if ok then
-		status.Text = "Imported " .. tostring(result) .. " instances from the selected branch(es). Return to GAMEFORGE and refresh."
+		status.Text = "Imported " .. tostring(result.instances) .. " instances in " .. tostring(result.chunks) .. " batches. Return to GAMEFORGE and refresh."
 		status.TextColor3 = Color3.fromRGB(131, 215, 177)
 	else
 		status.Text = tostring(result)
