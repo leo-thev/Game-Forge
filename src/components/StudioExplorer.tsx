@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Check, ChevronDown, CircleAlert, Copy, Download, Eye, FolderTree, Link2, LoaderCircle, Plus, RefreshCw, Search, Unlink, X } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, Copy, Download, Eye, FolderTree, Link2, LoaderCircle, Plus, RefreshCw, Search, Sparkles, Unlink, X } from "lucide-react";
 import type { Project, StudioInstance, StudioSystemAssignment, Translator } from "../types";
 import { Button, Field, IconButton, Modal } from "./UI";
 import { createStudioLink, hasStudioLink, revokeStudioLink } from "../lib/cloudStorage";
@@ -8,6 +8,66 @@ import { StudioTreeViewer } from "./StudioTreeViewer";
 
 type PlaceSummary = { id: string; universeId: string; lastSeenAt: string };
 type StudioPluginConfig = { supabaseUrl: string; anonKey: string; studioToken: string; projectName: string };
+type AutoSortCategory = {
+  id: string;
+  labelKey: string;
+  aliases: string[];
+  terms: string[];
+};
+type AutoSortProposal = { instance: StudioInstance; categoryId: string; systemName: string };
+type AutoSortGroup = { categoryId: string; systemName: string; proposals: AutoSortProposal[] };
+
+const autoSortCategories: AutoSortCategory[] = [
+  { id: "currency", labelKey: "Currency", aliases: ["currency", "money", "economy", "monnaie", "argent", "economie"], terms: ["currency", "money", "coin", "coins", "cash", "wallet", "balance", "monnaie", "argent", "piece", "pieces", "portefeuille"] },
+  { id: "inventory", labelKey: "Inventory", aliases: ["inventory", "item", "equipment", "backpack", "inventaire", "objet", "equipement"], terms: ["inventory", "inventories", "item", "items", "equipment", "backpack", "loadout", "hotbar", "tool", "tools", "inventaire", "objet", "objets", "equipement", "sac"] },
+  { id: "shop", labelKey: "Shop", aliases: ["shop", "boutique", "merchant", "purchase", "achat"], terms: ["shop", "market", "merchant", "vendor", "purchase", "buy", "sell", "product", "catalog", "boutique", "marchand", "vendeur", "achat", "acheter", "produit"] },
+  { id: "quests", labelKey: "Quest system", aliases: ["quest", "quests", "mission", "quete", "objectif"], terms: ["quest", "quests", "mission", "missions", "objective", "objectives", "quete", "quetes", "objectif"] },
+  { id: "combat", labelKey: "Combat", aliases: ["combat", "weapon", "arme", "pvp"], terms: ["combat", "weapon", "weapons", "sword", "gun", "damage", "attack", "hitbox", "projectile", "ammo", "arme", "armes", "degat", "attaque"] },
+  { id: "rounds", labelKey: "Round system", aliases: ["round", "match", "arena", "manche", "aren"], terms: ["round", "rounds", "match", "arena", "lobby", "manche", "arene", "salon"] },
+  { id: "progression", labelKey: "Progression", aliases: ["progression", "level", "experience", "niveau"], terms: ["progression", "level", "levels", "xp", "experience", "rank", "skill", "niveau", "niveaux", "rang", "competence"] },
+  { id: "saving", labelKey: "Save / load system", aliases: ["save", "load", "datastore", "data store", "profile", "sauvegarde", "profil"], terms: ["datastore", "data store", "save", "saving", "load", "profile", "persistence", "player data", "sauvegarde", "enregistrer", "chargement", "profil"] },
+  { id: "npc-dialogue", labelKey: "NPC dialogue", aliases: ["npc", "pnj", "dialogue", "conversation"], terms: ["npc", "pnj", "dialog", "dialogue", "conversation", "talk", "parler"] },
+];
+
+function normalizeTokens(value: string) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function hasTerm(tokens: string[], term: string) {
+  const phrase = normalizeTokens(term);
+  return phrase.length > 0 && tokens.some((_, start) =>
+    phrase.every((part, index) => tokens[start + index] === part)
+  );
+}
+
+function classifyInstance(instance: StudioInstance) {
+  const nameTokens = normalizeTokens(instance.name);
+  const classTokens = normalizeTokens(instance.class_name);
+  const pathTokens = instance.full_path.split("/").slice(0, -1).flatMap(normalizeTokens);
+  const ranked = autoSortCategories.map(category => ({
+    category,
+    score: (category.terms.some(term => hasTerm(nameTokens, term)) ? 4 : 0)
+      + (category.terms.some(term => hasTerm(classTokens, term)) ? 1 : 0)
+      + (category.terms.some(term => hasTerm(pathTokens, term)) ? 2 : 0),
+  })).filter(result => result.score > 0).sort((left, right) => right.score - left.score);
+
+  if (!ranked.length || (ranked[1] && ranked[1].score === ranked[0].score)) return null;
+  return ranked[0].category;
+}
+
+function existingSystemFor(category: AutoSortCategory, systems: string[]) {
+  return systems.find(system => {
+    const systemTokens = normalizeTokens(system);
+    return category.aliases.some(alias => hasTerm(systemTokens, alias));
+  });
+}
 
 function isStudioInstance(value: unknown): value is StudioInstance {
   if (!value || typeof value !== "object") return false;
@@ -39,6 +99,8 @@ export function StudioExplorer({ client, project, t }: { client: GameforgeSupaba
   const [setupConfig, setSetupConfig] = useState<StudioPluginConfig | null>(null);
   const [copied, setCopied] = useState(false);
   const [treeOpen, setTreeOpen] = useState(false);
+  const [autoSortOpen, setAutoSortOpen] = useState(false);
+  const [selectedAutoCategories, setSelectedAutoCategories] = useState<Set<string>>(() => new Set());
 
   const load = async () => {
     setLoading(true);
@@ -110,6 +172,29 @@ export function StudioExplorer({ client, project, t }: { client: GameforgeSupaba
       return !query || `${instance.name} ${instance.class_name} ${instance.full_path}`.toLocaleLowerCase().includes(query);
     });
   }, [placeInstances, search, filterSystem, assignmentsByInstance]);
+  const autoSortProposals = useMemo(() => placeInstances.flatMap(instance => {
+    if (!instance.is_present || (assignmentsByInstance.get(instance.instance_key)?.length ?? 0) > 0) return [];
+    const category = classifyInstance(instance);
+    if (!category) return [];
+    return [{
+      instance,
+      categoryId: category.id,
+      systemName: existingSystemFor(category, systems) ?? t(category.labelKey),
+    }];
+  }), [placeInstances, assignmentsByInstance, systems, t]);
+  const autoSortGroups = useMemo(() => {
+    const groups = new Map<string, AutoSortGroup>();
+    for (const proposal of autoSortProposals) {
+      const group = groups.get(proposal.categoryId) ?? {
+        categoryId: proposal.categoryId,
+        systemName: proposal.systemName,
+        proposals: [],
+      };
+      group.proposals.push(proposal);
+      groups.set(proposal.categoryId, group);
+    }
+    return [...groups.values()].sort((left, right) => left.systemName.localeCompare(right.systemName));
+  }, [autoSortProposals]);
 
   const toggleAssignment = async (instance: StudioInstance, systemName: string) => {
     const key = `${instance.instance_key}:${systemName}`;
@@ -132,6 +217,43 @@ export function StudioExplorer({ client, project, t }: { client: GameforgeSupaba
     } catch (caught) {
       console.error("GAMEFORGE could not update a Studio system assignment.", caught);
       setError(caught instanceof Error ? caught.message : t("The system assignment could not be saved."));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const openAutoSort = () => {
+    setSelectedAutoCategories(new Set(autoSortGroups.map(group => group.categoryId)));
+    setError("");
+    setAutoSortOpen(true);
+  };
+
+  const applyAutoSort = async () => {
+    const selected = autoSortGroups
+      .filter(group => selectedAutoCategories.has(group.categoryId))
+      .flatMap(group => group.proposals);
+    if (!selected.length) return;
+
+    setBusy("auto-sort");
+    setError("");
+    try {
+      for (let offset = 0; offset < selected.length; offset += 250) {
+        const batch = selected.slice(offset, offset + 250).map(proposal => ({
+          project_id: project.id,
+          place_id: selectedPlace,
+          instance_key: proposal.instance.instance_key,
+          system_name: proposal.systemName,
+        }));
+        const result = await client.from("gameforge_studio_instance_systems").insert(batch);
+        if (result.error) throw result.error;
+      }
+      setAutoSortOpen(false);
+      setSelectedAutoCategories(new Set());
+      await load();
+    } catch (caught) {
+      console.error("GAMEFORGE could not apply automatic Studio system suggestions.", caught);
+      await load();
+      setError(caught instanceof Error ? caught.message : t("The automatic sorting could not be applied."));
     } finally {
       setBusy("");
     }
@@ -223,7 +345,10 @@ export function StudioExplorer({ client, project, t }: { client: GameforgeSupaba
           </div>
           <div className="studio-system-tools">
             <form onSubmit={addSystem}><Field label={t("Create a system label")} value={newSystem} onChange={event => setNewSystem(event.target.value)} placeholder={t("e.g. Money system")} maxLength={80} /><Button type="submit" variant="secondary" disabled={!newSystem.trim()}><Plus size={13} />{t("Add system")}</Button></form>
-            {systems.length > 0 && <label><span>{t("ASSIGN TO")}</span><span className="studio-select"><select value={targetSystem} onChange={event => setTargetSystem(event.target.value)} aria-label={t("System to assign")}><option value="">{t("Choose a system")}</option>{systems.map(system => <option value={system} key={system}>{system}</option>)}</select><ChevronDown size={13} /></span></label>}
+            <div className="studio-system-tools-actions">
+              <Button variant="secondary" disabled={!autoSortProposals.length || busy !== ""} title={autoSortProposals.length ? t("Suggest systems for unassigned objects") : t("No unassigned objects could be confidently classified.")} onClick={openAutoSort}><Sparkles size={13} />{t("Auto-sort")} {autoSortProposals.length > 0 && <span>{autoSortProposals.length}</span>}</Button>
+              {systems.length > 0 && <label><span>{t("ASSIGN TO")}</span><span className="studio-select"><select value={targetSystem} onChange={event => setTargetSystem(event.target.value)} aria-label={t("System to assign")}><option value="">{t("Choose a system")}</option>{systems.map(system => <option value={system} key={system}>{system}</option>)}</select><ChevronDown size={13} /></span></label>}
+            </div>
           </div>
           <div className="studio-snapshot-meta">{t("Last imported")}: {places.find(place => place.id === selectedPlace) ? dateLabel(places.find(place => place.id === selectedPlace)!.lastSeenAt) : "—"} · {filteredInstances.length} {t("matching instances")}</div>
           <div className="studio-instance-list">
@@ -249,6 +374,44 @@ export function StudioExplorer({ client, project, t }: { client: GameforgeSupaba
       t={t}
       onClose={() => setTreeOpen(false)}
     />}
+    {autoSortOpen && <Modal title={t("Review automatic system suggestions")} onClose={() => setAutoSortOpen(false)} wide>
+      <div className="studio-auto-sort">
+        <p>{t("Suggestions use object names, types, and paths only. Existing assignments are untouched, and nothing is saved until you apply the selected groups.")}</p>
+        <div className="studio-auto-sort-groups">
+          {autoSortGroups.map(group => {
+            const category = autoSortCategories.find(item => item.id === group.categoryId);
+            return <div className="studio-auto-sort-group" key={group.categoryId}>
+              <input
+                id={`studio-auto-sort-${group.categoryId}`}
+                type="checkbox"
+                checked={selectedAutoCategories.has(group.categoryId)}
+                onChange={() => setSelectedAutoCategories(current => {
+                  const next = new Set(current);
+                  if (next.has(group.categoryId)) next.delete(group.categoryId);
+                  else next.add(group.categoryId);
+                  return next;
+                })}
+              />
+              <span className="studio-auto-sort-copy">
+                <label className="studio-auto-sort-group-heading" htmlFor={`studio-auto-sort-${group.categoryId}`}><strong>{category ? t(category.labelKey) : group.systemName}</strong><em>{group.proposals.length} {t("objects")}</em></label>
+                <code>{group.systemName}</code>
+                <details>
+                  <summary>{t("Preview matching objects")}</summary>
+                  <ul>{group.proposals.slice(0, 8).map(proposal => <li key={proposal.instance.instance_key} title={proposal.instance.full_path}>{proposal.instance.name} <code>{proposal.instance.class_name}</code></li>)}</ul>
+                  {group.proposals.length > 8 && <small>+{group.proposals.length - 8} {t("additional objects")}</small>}
+                </details>
+              </span>
+            </div>;
+          })}
+          {!autoSortGroups.length && <div className="studio-explorer-empty">{t("No unassigned objects could be confidently classified.")}</div>}
+        </div>
+        {error && <p className="studio-explorer-error" role="alert"><CircleAlert size={14} />{error}</p>}
+        <div className="modal-actions">
+          <Button variant="secondary" disabled={busy !== ""} onClick={() => setAutoSortOpen(false)}>{t("Cancel")}</Button>
+          <Button disabled={!autoSortGroups.some(group => selectedAutoCategories.has(group.categoryId)) || busy !== ""} onClick={() => void applyAutoSort()}><Check size={13} />{busy === "auto-sort" ? t("Applying suggestions...") : t("Apply selected suggestions")}</Button>
+        </div>
+      </div>
+    </Modal>}
     {setupConfig && <Modal title={t("Connect Roblox Studio")} onClose={() => setSetupConfig(null)} wide>
       <div className="studio-setup-dialog">
         <p>{t("Download the plugin, install it in Studio, then paste this one-time connection configuration into the plugin and click Connect.")}</p>
