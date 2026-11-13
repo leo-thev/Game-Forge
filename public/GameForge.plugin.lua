@@ -1,7 +1,7 @@
 local HttpService = game:GetService("HttpService")
 
 local toolbar = plugin:CreateToolbar("GAMEFORGE")
-local openButton = toolbar:CreateButton("Project Explorer v1.4", "Import this game's hierarchy into GAMEFORGE (v1.4)", "")
+local openButton = toolbar:CreateButton("Project Explorer v1.5", "Import this game's hierarchy into GAMEFORGE (v1.5)", "")
 openButton.ClickableWhenViewportHidden = true
 
 local widgetInfo = DockWidgetPluginGuiInfo.new(
@@ -14,7 +14,7 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 	300
 )
 local widget = plugin:CreateDockWidgetPluginGui("GameForgeProjectExplorer", widgetInfo)
-widget.Title = "GAMEFORGE Project Explorer v1.4"
+widget.Title = "GAMEFORGE Project Explorer v1.5"
 
 local function makeLabel(parent, text, height, textSize)
 	local label = Instance.new("TextLabel")
@@ -52,7 +52,7 @@ layout.Padding = UDim.new(0, 9)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = content
 
-local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER  /  v1.4", 24, 16)
+local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER  /  v1.5", 24, 16)
 heading.Font = Enum.Font.SourceSansBold
 heading.LayoutOrder = 1
 makeLabel(content, "Connect a project, then import the whole place. Large hierarchies are sent in smaller batches automatically. Only names, types, and paths are sent; script source is never read.", 52, 13).LayoutOrder = 2
@@ -134,6 +134,28 @@ local function isExplorerVisible(instance)
 	return not (ok and isLocked == true)
 end
 
+local explorerServiceNames = {
+	Workspace = true,
+	Players = true,
+	Lighting = true,
+	MaterialService = true,
+	NetworkClient = true,
+	ReplicatedFirst = true,
+	ReplicatedStorage = true,
+	ServerScriptService = true,
+	ServerStorage = true,
+	StarterGui = true,
+	StarterPack = true,
+	StarterPlayer = true,
+	Teams = true,
+	SoundService = true,
+	Chat = true,
+	TextChatService = true,
+	LocalizationService = true,
+	TestService = true,
+	VoiceChatService = true,
+}
+
 local function segmentFor(instance)
 	local parent = instance.Parent
 	if not parent then
@@ -141,12 +163,7 @@ local function segmentFor(instance)
 	end
 
 	local instanceClassName = classNameFor(instance)
-	local siblings = {}
-	for _, sibling in ipairs(parent:GetChildren()) do
-		if isExplorerVisible(sibling) then
-			table.insert(siblings, sibling)
-		end
-	end
+	local siblings = parent:GetChildren()
 	local originalOrder = {}
 	for index, sibling in ipairs(siblings) do
 		originalOrder[sibling] = index
@@ -269,6 +286,18 @@ local function postSnapshotChunk(config, placeId, scopeKey, snapshotId, rows, is
 	return send(rows, isFinalChunk)
 end
 
+local function clearRootSnapshot(config, root)
+	local scopeKey = keyFor(root)
+	return postSnapshotChunk(
+		config,
+		game.PlaceId,
+		scopeKey,
+		HttpService:GenerateGUID(false),
+		{},
+		true
+	)
+end
+
 local function importRoot(config, root, progress)
 	local scopeKey = keyFor(root)
 	local snapshotId = HttpService:GenerateGUID(false)
@@ -377,12 +406,7 @@ importButton.Activated:Connect(function()
 	status.TextColor3 = Color3.fromRGB(160, 174, 202)
 
 	local ok, result = pcall(function()
-		local roots = {}
-		for _, root in ipairs(game:GetChildren()) do
-			if isExplorerVisible(root) then
-				table.insert(roots, root)
-			end
-		end
+		local roots = game:GetChildren()
 		table.sort(roots, function(left, right)
 			if left.Name == right.Name then
 				return classNameFor(left) < classNameFor(right)
@@ -395,13 +419,23 @@ importButton.Activated:Connect(function()
 
 		local totalImported = 0
 		local totalChunks = 0
+		local visibleRootCount = 0
 		for index, root in ipairs(roots) do
-			status.Text = "Importing branch " .. tostring(index) .. " of " .. tostring(#roots) .. ": " .. root.Name
-			local imported, chunks = importRoot(config, root, function(branchImported, branchChunks)
-				status.Text = "Importing " .. root.Name .. ": " .. tostring(branchImported) .. " instances in " .. tostring(branchChunks) .. " batches."
-			end)
-			totalImported += imported
-			totalChunks += chunks
+			if explorerServiceNames[root.Name] and isExplorerVisible(root) then
+				visibleRootCount += 1
+				status.Text = "Importing visible service " .. tostring(visibleRootCount) .. ": " .. root.Name
+				local imported, chunks = importRoot(config, root, function(branchImported, branchChunks)
+					status.Text = "Importing " .. root.Name .. ": " .. tostring(branchImported) .. " instances in " .. tostring(branchChunks) .. " batches."
+				end)
+				totalImported += imported
+				totalChunks += chunks
+			else
+				status.Text = "Removing previously imported hidden service: " .. root.Name
+				totalChunks += clearRootSnapshot(config, root)
+			end
+		end
+		if visibleRootCount == 0 then
+			error("No visible game services were found to import.")
 		end
 		return { instances = totalImported, chunks = totalChunks }
 	end)
