@@ -171,7 +171,6 @@ local function postSnapshotChunk(config, placeId, scopeKey, snapshotId, rows, is
 		for _, row in ipairs(rowsToSend) do
 			local issue
 			local nameLength = type(row.name) == "string" and utf8.len(row.name) or nil
-			local classNameLength = type(row.class_name) == "string" and utf8.len(row.class_name) or nil
 			local pathLength = type(row.full_path) == "string" and utf8.len(row.full_path) or nil
 			if type(row.instance_key) ~= "string" or #row.instance_key < 1 or #row.instance_key > 1500 then
 				issue = "instance key must contain 1-1500 characters"
@@ -180,7 +179,7 @@ local function postSnapshotChunk(config, placeId, scopeKey, snapshotId, rows, is
 				issue = "instance key is outside its hierarchy branch"
 			elseif not nameLength or nameLength > 200 then
 				issue = "instance name is missing or longer than 200 characters"
-			elseif not classNameLength or classNameLength < 1 or classNameLength > 100 then
+			elseif type(row.class_name) ~= "string" or #row.class_name < 1 or #row.class_name > 100 then
 				issue = "class name must contain 1-100 characters"
 			elseif not pathLength or pathLength < 1 or pathLength > 3000 then
 				issue = "full path must contain 1-3000 characters"
