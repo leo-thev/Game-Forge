@@ -11,13 +11,9 @@ type TreeNode = {
   children: TreeNode[];
 };
 
-type PositionedNode = TreeNode & { x: number; y: number; depth: number };
+type TreeRow = { node: TreeNode; prefix: string; depth: number };
 type Viewport = { x: number; y: number; scale: number };
 
-const NODE_WIDTH = 168;
-const NODE_HEIGHT = 58;
-const LEAF_GAP = 198;
-const LEVEL_GAP = 106;
 const MIN_SCALE = 0.0001;
 const MAX_SCALE = 2.5;
 
@@ -77,45 +73,39 @@ function createTree(instances: StudioInstance[], projectName: string) {
   return root;
 }
 
-function layoutTree(root: TreeNode) {
-  const nodes: PositionedNode[] = [];
-  const edges: Array<{ key: string; path: string }> = [];
-  let leafIndex = 0;
+function flattenTree(root: TreeNode) {
+  const rows: TreeRow[] = [];
+  const stack: Array<{ node: TreeNode; guides: string; depth: number; isLast: boolean; isRoot: boolean }> = [
+    { node: root, guides: "", depth: 0, isLast: true, isRoot: true },
+  ];
   let maxDepth = 0;
+  let maxLabelLength = 0;
 
-  const position = (node: TreeNode, depth: number): number => {
-    maxDepth = Math.max(maxDepth, depth);
-    let x: number;
-    if (!node.children.length) {
-      x = leafIndex * LEAF_GAP + NODE_WIDTH / 2 + 36;
-      leafIndex += 1;
-    } else {
-      const childXs = node.children.map(child => position(child, depth + 1));
-      x = (childXs[0] + childXs[childXs.length - 1]) / 2;
-      node.children.forEach((child, index) => {
-        const childX = childXs[index];
-        const startX = x;
-        const startY = depth * LEVEL_GAP + 54 + NODE_HEIGHT;
-        const endY = (depth + 1) * LEVEL_GAP + 54;
-        const bendY = (startY + endY) / 2;
-        edges.push({
-          key: child.key,
-          path: `M ${startX} ${startY} V ${bendY} H ${childX} V ${endY}`,
-        });
+  while (stack.length) {
+    const current = stack.pop()!;
+    const prefix = current.isRoot ? "" : `${current.guides}${current.isLast ? "└── " : "├── "}`;
+    rows.push({ node: current.node, prefix, depth: current.depth });
+    maxDepth = Math.max(maxDepth, current.depth);
+    maxLabelLength = Math.max(maxLabelLength, prefix.length + current.node.name.length + current.node.className.length + 4);
+
+    const childGuides = current.isRoot
+      ? ""
+      : `${current.guides}${current.isLast ? "    " : "│   "}`;
+    for (let index = current.node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({
+        node: current.node.children[index],
+        guides: childGuides,
+        depth: current.depth + 1,
+        isLast: index === current.node.children.length - 1,
+        isRoot: false,
       });
     }
+  }
 
-    nodes.push({ ...node, x, y: depth * LEVEL_GAP + 54, depth });
-    return x;
-  };
-
-  position(root, 0);
   return {
-    nodes,
-    edges,
-    width: Math.max(900, leafIndex * LEAF_GAP + 120),
-    height: (maxDepth + 1) * LEVEL_GAP + 110,
-    rootX: nodes.find(node => node.key === root.key)?.x ?? 0,
+    rows,
+    width: Math.max(900, maxLabelLength * 9 + maxDepth * 10 + 64),
+    height: Math.max(100, rows.length * 28 + 48),
   };
 }
 
@@ -127,13 +117,9 @@ export function StudioTreeViewer({ instances, projectName, t, onClose }: {
 }) {
   const dragRef = useRef<{ pointerId: number; clientX: number; clientY: number; x: number; y: number } | null>(null);
   const tree = useMemo(() => createTree(instances, projectName), [instances, projectName]);
-  const layout = useMemo(() => layoutTree(tree), [tree]);
-  const objectCount = layout.nodes.length - 1;
-  const [viewport, setViewport] = useState<Viewport>(() => ({
-    x: window.innerWidth / 2 - layout.rootX * 0.9,
-    y: 28,
-    scale: 0.9,
-  }));
+  const layout = useMemo(() => flattenTree(tree), [tree]);
+  const objectCount = layout.rows.length - 1;
+  const [viewport, setViewport] = useState<Viewport>({ x: 28, y: 22, scale: 1 });
   const [canvasSize, setCanvasSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   useEffect(() => {
@@ -151,7 +137,7 @@ export function StudioTreeViewer({ instances, projectName, t, onClose }: {
   }, [onClose]);
 
   const centerOnRoot = () => {
-    setViewport({ x: canvasSize.width / 2 - layout.rootX * 0.9, y: 28, scale: 0.9 });
+    setViewport({ x: 28, y: 22, scale: 1 });
   };
 
   const zoomAtCenter = (factor: number) => {
@@ -172,7 +158,7 @@ export function StudioTreeViewer({ instances, projectName, t, onClose }: {
     setViewport({
       scale,
       x: (canvasSize.width - layout.width * scale) / 2,
-      y: (canvasSize.height - 100 - layout.height * scale) / 2 + 70,
+      y: (canvasSize.height - layout.height * scale) / 2,
     });
   };
 
@@ -244,24 +230,29 @@ export function StudioTreeViewer({ instances, projectName, t, onClose }: {
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        {layout.nodes.length > 1 ? <svg
-          className="studio-tree-svg"
-          width={layout.width}
-          height={layout.height}
-          style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})` }}
-          role="img"
+        {layout.rows.length > 1 ? <div
+          className="studio-tree-lines"
+          style={{
+            width: layout.width,
+            minHeight: layout.height,
+            transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
+          }}
+          role="tree"
           aria-label={`${objectCount} ${t("objects")}`}
         >
-          <g className="studio-tree-edges">{layout.edges.map(edge => <path key={edge.key} d={edge.path} />)}</g>
-          <g className="studio-tree-nodes">
-            {layout.nodes.map(node => <g className={`studio-tree-node ${node.depth === 0 ? "studio-tree-node-root" : ""}`} key={node.key} transform={`translate(${node.x - NODE_WIDTH / 2}, ${node.y})`}>
-              <title>{node.fullPath || node.name}{node.className ? ` · ${node.className}` : ""}</title>
-              <rect width={NODE_WIDTH} height={NODE_HEIGHT} rx="8" />
-              <text className="studio-tree-node-name" x="12" y="24">{node.name.length > 22 ? `${node.name.slice(0, 21)}…` : node.name}</text>
-              <text className="studio-tree-node-class" x="12" y="43">{node.className}</text>
-            </g>)}
-          </g>
-        </svg> : <div className="studio-tree-empty">{t("No instances match this filter.")}</div>}
+          {layout.rows.map(({ node, prefix, depth }) => <div
+            className={`studio-tree-line ${depth === 0 ? "studio-tree-line-root" : ""}`}
+            key={node.key}
+            role="treeitem"
+            aria-level={depth + 1}
+            aria-label={`${node.name}${node.className ? ` · ${node.className}` : ""}`}
+            title={node.fullPath || node.name}
+          >
+            <code className="studio-tree-prefix">{prefix}</code>
+            <span className="studio-tree-line-name">{node.name}</span>
+            {node.className && <span className="studio-tree-line-class">{node.className}</span>}
+          </div>)}
+        </div> : <div className="studio-tree-empty">{t("No instances match this filter.")}</div>}
       </div>
     </section>,
     document.body,
