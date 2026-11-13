@@ -279,6 +279,7 @@ const french: Record<string, string> = {
   "Download plugin": "Télécharger le plugin",
   "In Studio, create a Script, paste the file contents, and choose Save as Local Plugin from the Plugins menu.": "Dans Studio, créez un Script, collez le contenu du fichier et choisissez Save as Local Plugin dans le menu Plugins.",
   "Open the GAMEFORGE toolbar button, paste the configuration below, and click Connect. Enable HTTP requests if Studio asks.": "Ouvrez le bouton GAMEFORGE dans la barre d’outils, collez la configuration ci-dessous et cliquez sur Connect. Autorisez les requêtes HTTP si Studio le demande.",
+  "After connecting, select one or more folders, models, or services in Studio Explorer, then click Import selected branch(es).": "Après la connexion, sélectionnez un ou plusieurs dossiers, modèles ou services dans l’Explorateur de Studio, puis cliquez sur Import selected branch(es).",
   "This token can upload hierarchy metadata only to this project. It does not grant access to your account, and the code of your scripts is not transmitted. Reconnecting replaces the previous token.": "Ce jeton peut uniquement envoyer les métadonnées de l’arborescence vers ce projet. Il ne donne pas accès à votre compte et le code des scripts n’est pas transmis. Une reconnexion remplace le jeton précédent.",
   "Copy configuration": "Copier la configuration",
   "Copied": "Copié",
