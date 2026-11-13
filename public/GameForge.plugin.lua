@@ -205,7 +205,11 @@ local function postSnapshotChunk(config, placeId, scopeKey, snapshotId, rows, is
 			Body = body,
 		})
 		if not response.Success then
-			error("GAMEFORGE returned HTTP " .. tostring(response.StatusCode) .. ". Check the connection and try again.")
+			local responseBody = string.gsub(response.Body or "", "[\r\n]+", " ")
+			if #responseBody > 400 then
+				responseBody = string.sub(responseBody, 1, 400) .. "..."
+			end
+			error("GAMEFORGE returned HTTP " .. tostring(response.StatusCode) .. ". Supabase: " .. responseBody)
 		end
 		return 1
 	end
@@ -340,9 +344,11 @@ importButton.Activated:Connect(function()
 	importButton.Active = true
 	importButton.AutoButtonColor = true
 	if ok then
+		status.Size = UDim2.new(1, 0, 0, 42)
 		status.Text = "Imported " .. tostring(result.instances) .. " instances in " .. tostring(result.chunks) .. " batches. Return to GAMEFORGE and refresh."
 		status.TextColor3 = Color3.fromRGB(131, 215, 177)
 	else
+		status.Size = UDim2.new(1, 0, 0, 100)
 		status.Text = tostring(result)
 		status.TextColor3 = Color3.fromRGB(240, 145, 145)
 	end
