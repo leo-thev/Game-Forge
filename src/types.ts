@@ -85,6 +85,25 @@ export type UsageStats = {
   lastActivityAt: string | null;
 };
 
+export type StudioInstance = {
+  project_id: string;
+  place_id: string;
+  universe_id: string;
+  instance_key: string;
+  name: string;
+  class_name: string;
+  full_path: string;
+  last_seen_at: string;
+  is_present: boolean;
+};
+
+export type StudioSystemAssignment = {
+  project_id: string;
+  place_id: string;
+  instance_key: string;
+  system_name: string;
+};
+
 export type BoardItem = {
   id: string;
   title: string;

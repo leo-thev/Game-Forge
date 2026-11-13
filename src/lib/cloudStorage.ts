@@ -316,6 +316,27 @@ export async function getUsageStats(client: GameforgeSupabase): Promise<UsageSta
   };
 }
 
+export async function createStudioLink(client: GameforgeSupabase, projectId: string): Promise<string> {
+  const { data, error } = await client.rpc("gameforge_create_studio_link", { target_project_id: projectId });
+  throwOnError(error);
+  if (typeof data !== "string" || !/^[a-f0-9]{64}$/.test(data)) {
+    throw new Error("The Studio connection could not be created.");
+  }
+  return data;
+}
+
+export async function revokeStudioLink(client: GameforgeSupabase, projectId: string): Promise<void> {
+  const { error } = await client.rpc("gameforge_revoke_studio_link", { target_project_id: projectId });
+  throwOnError(error);
+}
+
+export async function hasStudioLink(client: GameforgeSupabase, projectId: string): Promise<boolean> {
+  const { data, error } = await client.rpc("gameforge_studio_link_status", { target_project_id: projectId });
+  throwOnError(error);
+  if (typeof data !== "boolean") throw new Error("The Studio connection status is invalid.");
+  return data;
+}
+
 export async function createProjectInvite(client: GameforgeSupabase, projectId: string): Promise<string> {
   const { data, error } = await client.rpc("gameforge_create_project_invite", {
     target_project_id: projectId,
