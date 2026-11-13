@@ -1,7 +1,7 @@
 local HttpService = game:GetService("HttpService")
 
 local toolbar = plugin:CreateToolbar("GAMEFORGE")
-local openButton = toolbar:CreateButton("Project Explorer", "Import this game's hierarchy into GAMEFORGE", "")
+local openButton = toolbar:CreateButton("Project Explorer v1.1", "Import this game's hierarchy into GAMEFORGE (v1.1)", "")
 openButton.ClickableWhenViewportHidden = true
 
 local widgetInfo = DockWidgetPluginGuiInfo.new(
@@ -14,7 +14,7 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 	300
 )
 local widget = plugin:CreateDockWidgetPluginGui("GameForgeProjectExplorer", widgetInfo)
-widget.Title = "GAMEFORGE Project Explorer"
+widget.Title = "GAMEFORGE Project Explorer v1.1"
 
 local function makeLabel(parent, text, height, textSize)
 	local label = Instance.new("TextLabel")
@@ -52,7 +52,7 @@ layout.Padding = UDim.new(0, 9)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = content
 
-local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER", 24, 16)
+local heading = makeLabel(content, "GAMEFORGE  /  PROJECT EXPLORER  /  v1.1", 24, 16)
 heading.Font = Enum.Font.SourceSansBold
 heading.LayoutOrder = 1
 makeLabel(content, "Connect a project, then import the whole place. Large hierarchies are sent in smaller batches automatically. Only names, types, and paths are sent; script source is never read.", 52, 13).LayoutOrder = 2
@@ -179,8 +179,6 @@ local function postSnapshotChunk(config, placeId, scopeKey, snapshotId, rows, is
 				issue = "instance key is outside its hierarchy branch"
 			elseif not nameLength or nameLength > 200 then
 				issue = "instance name is missing or longer than 200 characters"
-			elseif type(row.class_name) ~= "string" or #row.class_name < 1 or #row.class_name > 100 then
-				issue = "class name must contain 1-100 characters"
 			elseif not pathLength or pathLength < 1 or pathLength > 3000 then
 				issue = "full path must contain 1-3000 characters"
 			elseif seenKeys[row.instance_key] then
